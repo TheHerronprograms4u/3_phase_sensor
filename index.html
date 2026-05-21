@@ -463,7 +463,8 @@
             }
 
             const now = Date.now();
-            const diff = now - state.lastUpdate;
+            // Use Math.max(0, ...) to handle slight clock drift between your PC and Supabase server
+            const diff = Math.max(0, now - state.lastUpdate);
             const isFresh = diff < 10000; 
 
             if (isFresh) {
@@ -477,7 +478,7 @@
                 text.innerText = 'STALE / OFFLINE';
                 text.style.color = 'var(--color-trip)';
                 lat.innerText = `${Math.floor(diff / 1000)}s ago`;
-                if (diff > 15000) overlay.classList.add('visible');
+                if (diff > 20000) overlay.classList.add('visible');
             }
         }
 
