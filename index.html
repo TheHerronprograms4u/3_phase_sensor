@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3-Phase Protection Monitoring</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #05070a;
+            --bg-card: rgba(16, 22, 32, 0.7);
+            --border: rgba(255, 255, 255, 0.1);
+            --text-primary: #ffffff;
+            --text-secondary: #8a95a5;
+            
+            --color-ok: #00ff88;
+            --color-warn: #ffaa00;
+            --color-trip: #ff4444;
+            --color-offline: #555555;
+            
+            --shadow-neon: 0 0 15px rgba(0, 255, 136, 0.2);
+            --glass-blur: blur(12px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(0, 255, 136, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(255, 68, 68, 0.05) 0%, transparent 40%);
+        }
+
+        /* --- Header --- */
+        header {
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: var(--glass-blur);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .system-info h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, #fff, var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 50px;
+            border: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-offline);
+            box-shadow: 0 0 10px var(--color-offline);
+            transition: all 0.3s ease;
+        }
+
+        .status-dot.online {
+            background: var(--color-ok);
+            box-shadow: 0 0 10px var(--color-ok);
+            animation: pulse 2s infinite;
+        }
+
+        /* --- Main Dashboard --- */
+        main {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .phase-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2rem;
+            backdrop-filter: var(--glass-blur);
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .phase-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .phase-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 2rem;
+        }
+
+        .phase-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .phase-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            font-weight: 600;
+        }
+
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .data-point .label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .data-point .value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .data-point .unit {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-left: 0.25rem;
+            font-weight: 400;
+        }
+
+        .sparkline-container {
+            height: 60px;
+            width: 100%;
+            margin-top: 1rem;
+            opacity: 0.6;
+        }
+
+        /* --- Footer --- */
+        footer {
+            padding: 2rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* --- Animations & Utilities --- */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .trip-pulse {
+            animation: border-pulse 1.5s infinite;
+        }
+
+        @keyframes border-pulse {
+            0% { border-color: var(--color-trip); box-shadow: 0 0 0 0 rgba(255, 68, 68, 0.4); }
+            70% { border-color: var(--color-trip); box-shadow: 0 0 0 15px rgba(255, 68, 68, 0); }
+            100% { border-color: var(--color-trip); box-shadow: 0 0 0 0 rgba(255, 68, 68, 0); }
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(5, 7, 10, 0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+        }
+
+        .overlay.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .error-card {
+            background: var(--bg-card);
+            padding: 3rem;
+            border-radius: 32px;
+            border: 1px solid var(--color-trip);
+            text-align: center;
+        }
+
+        .error-card h2 {
+            color: var(--color-trip);
+            margin-bottom: 1rem;
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+            header { flex-direction: column; gap: 1rem; text-align: center; }
+            main { grid-template-columns: 1fr; padding: 1rem; }
+            footer { flex-direction: column; gap: 0.5rem; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="no-connection-overlay" class="overlay">
+        <div class="error-card">
+            <h2>SYSTEM OFFLINE</h2>
+            <p>Unable to connect to ESP32 at 192.168.1.53</p>
+            <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary)">Retrying every second...</p>
+        </div>
+    </div>
+
+    <header>
+        <div class="system-info">
+            <h1>3-Phase Protection Monitoring</h1>
+        </div>
+        <div class="connection-status">
+            <div id="status-dot" class="status-dot"></div>
+            <span id="status-text">OFFLINE</span>
+            <span style="color: var(--border); margin: 0 5px;">|</span>
+            <span id="latency">0ms</span>
+        </div>
+    </header>
+
+    <main id="dashboard">
+        <!-- L1 Card -->
+        <section class="phase-card" id="card-L1">
+            <div class="phase-header">
+                <div>
+                    <span class="phase-label">Phase L1</span>
+                    <h2 style="font-size: 1.25rem;">Main Line</h2>
+                </div>
+                <div class="phase-badge" id="badge-L1">OFFLINE</div>
+            </div>
+            <div class="data-grid">
+                <div class="data-point">
+                    <span class="label">Voltage</span>
+                    <span class="value" id="v-L1">0.0</span><span class="unit">V</span>
+                </div>
+                <div class="data-point">
+                    <span class="label">Current</span>
+                    <span class="value" id="i-L1">0.0</span><span class="unit">A</span>
+                </div>
+            </div>
+            <div class="sparkline-container">
+                <canvas id="spark-L1"></canvas>
+            </div>
+        </section>
+
+        <!-- L2 Card -->
+        <section class="phase-card" id="card-L2">
+            <div class="phase-header">
+                <div>
+                    <span class="phase-label">Phase L2</span>
+                    <h2 style="font-size: 1.25rem;">Control Line</h2>
+                </div>
+                <div class="phase-badge" id="badge-L2">OFFLINE</div>
+            </div>
+            <div class="data-grid">
+                <div class="data-point">
+                    <span class="label">Voltage</span>
+                    <span class="value" id="v-L2">0.0</span><span class="unit">V</span>
+                </div>
+                <div class="data-point">
+                    <span class="label">Current</span>
+                    <span class="value" id="i-L2">0.0</span><span class="unit">A</span>
+                </div>
+            </div>
+            <div class="sparkline-container">
+                <canvas id="spark-L2"></canvas>
+            </div>
+        </section>
+
+        <!-- L3 Card -->
+        <section class="phase-card" id="card-L3">
+            <div class="phase-header">
+                <div>
+                    <span class="phase-label">Phase L3</span>
+                    <h2 style="font-size: 1.25rem;">Auxiliary Line</h2>
+                </div>
+                <div class="phase-badge" id="badge-L3">OFFLINE</div>
+            </div>
+            <div class="data-grid">
+                <div class="data-point">
+                    <span class="label">Voltage</span>
+                    <span class="value" id="v-L3">0.0</span><span class="unit">V</span>
+                </div>
+                <div class="data-point">
+                    <span class="label">Current</span>
+                    <span class="value" id="i-L3">0.0</span><span class="unit">A</span>
+                </div>
+            </div>
+            <div class="sparkline-container">
+                <canvas id="spark-L3"></canvas>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div>System Uptime: <span id="uptime">00:00:00</span></div>
+        <div>Last Updated: <span id="last-update">-</span></div>
+        <div>V1.2.0 • Industrial IoT Core</div>
+    </footer>
+
+    <script>
+        const CONFIG = {
+            ENDPOINT: 'http://192.168.1.53/data',
+            POLL_INTERVAL: 1000,
+            MAX_HISTORY: 50,
+            MOCK_MODE: false // Set to true for UI testing without ESP32
+        };
+
+        const state = {
+            L1: { history: [], lastVal: 0 },
+            L2: { history: [], lastVal: 0 },
+            L3: { history: [], lastVal: 0 },
+            startTime: Date.now(),
+            isConnected: false
+        };
+
+        // --- Sparkline Implementation ---
+        class Sparkline {
+            constructor(canvasId, color) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.color = color;
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+            }
+
+            draw(data) {
+                const { width, height } = this.canvas;
+                this.ctx.clearRect(0, 0, width, height);
+                if (data.length < 2) return;
+
+                const max = Math.max(...data, 240); // Baseline max for voltage scaling
+                const min = Math.min(...data, 0);
+                const range = max - min;
+
+                this.ctx.beginPath();
+                this.ctx.strokeStyle = this.color;
+                this.ctx.lineWidth = 2;
+                this.ctx.lineJoin = 'round';
+
+                const step = width / (CONFIG.MAX_HISTORY - 1);
+                
+                data.forEach((val, i) => {
+                    const x = i * step;
+                    const y = height - ((val - min) / range * height);
+                    if (i === 0) this.ctx.moveTo(x, y);
+                    else this.ctx.lineTo(x, y);
+                });
+
+                this.ctx.stroke();
+
+                // Gradient fill
+                this.ctx.lineTo(width, height);
+                this.ctx.lineTo(0, height);
+                const grad = this.ctx.createLinearGradient(0, 0, 0, height);
+                grad.addColorStop(0, this.color + '33');
+                grad.addColorStop(1, 'transparent');
+                this.ctx.fillStyle = grad;
+                this.ctx.fill();
+            }
+        }
+
+        const sparks = {
+            L1: new Sparkline('spark-L1', '#00ff88'),
+            L2: new Sparkline('spark-L2', '#00ff88'),
+            L3: new Sparkline('spark-L3', '#00ff88')
+        };
+
+        // --- UI Updates ---
+        function updatePhaseUI(id, data) {
+            const vElem = document.getElementById(`v-${id}`);
+            const iElem = document.getElementById(`i-${id}`);
+            const badge = document.getElementById(`badge-${id}`);
+            const card = document.getElementById(`card-${id}`);
+
+            // Update Values with smooth transition check
+            if (vElem.innerText != data.voltage.toFixed(1)) vElem.innerText = data.voltage.toFixed(1);
+            if (iElem.innerText != data.current.toFixed(1)) iElem.innerText = data.current.toFixed(1);
+
+            // Status Logic
+            let status = 'OK';
+            let color = 'var(--color-ok)';
+            card.classList.remove('trip-pulse');
+
+            if (!data.online) {
+                status = 'OFFLINE';
+                color = 'var(--color-offline)';
+            } else if (data.relay === 0) {
+                status = 'TRIP';
+                color = 'var(--color-trip)';
+                card.classList.add('trip-pulse');
+            } else if (data.current > 10) { // Example warning threshold
+                status = 'WARN';
+                color = 'var(--color-warn)';
+            }
+
+            badge.innerText = status;
+            badge.style.color = color;
+            badge.style.borderColor = color;
+            
+            // Update Sparkline
+            state[id].history.push(data.voltage);
+            if (state[id].history.length > CONFIG.MAX_HISTORY) state[id].history.shift();
+            sparks[id].draw(state[id].history);
+        }
+
+        function updateGlobalStatus(online, latency = 0) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            const lat = document.getElementById('latency');
+            const overlay = document.getElementById('no-connection-overlay');
+
+            if (online) {
+                dot.classList.add('online');
+                text.innerText = 'ONLINE';
+                text.style.color = 'var(--color-ok)';
+                lat.innerText = `${latency}ms`;
+                overlay.classList.remove('visible');
+            } else {
+                dot.classList.remove('online');
+                text.innerText = 'OFFLINE';
+                text.style.color = 'var(--color-offline)';
+                lat.innerText = '0ms';
+                overlay.classList.add('visible');
+            }
+        }
+
+        function updateUptime() {
+            const diff = Date.now() - state.startTime;
+            const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
+            const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+            const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+            document.getElementById('uptime').innerText = `${h}:${m}:${s}`;
+        }
+
+        // --- Data Fetching ---
+        async function fetchData() {
+            const start = Date.now();
+            try {
+                let data;
+                if (CONFIG.MOCK_MODE) {
+                    data = {
+                        L1: { voltage: 220 + Math.random()*5, current: 5 + Math.random(), relay: 1, online: true },
+                        L2: { voltage: 221 + Math.random()*5, current: 4 + Math.random(), relay: 1, online: true },
+                        L3: { voltage: 0, current: 0, relay: 0, online: false }
+                    };
+                } else {
+                    const response = await fetch(CONFIG.ENDPOINT, { mode: 'cors' });
+                    data = await response.json();
+                }
+
+                const latency = Date.now() - start;
+                updateGlobalStatus(true, latency);
+                
+                Object.keys(data).forEach(phase => {
+                    updatePhaseUI(phase, data[phase]);
+                });
+
+                document.getElementById('last-update').innerText = new Date().toLocaleTimeString();
+                state.isConnected = true;
+
+            } catch (err) {
+                console.error('Fetch Error:', err);
+                updateGlobalStatus(false);
+                state.isConnected = false;
+            }
+        }
+
+        // Init
+        setInterval(fetchData, CONFIG.POLL_INTERVAL);
+        setInterval(updateUptime, 1000);
+        fetchData(); // Initial call
+    </script>
+</body>
+</html>
