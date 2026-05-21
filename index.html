@@ -362,7 +362,8 @@
             L1: { history: [], lastVal: 0 },
             L2: { history: [], lastVal: 0 },
             L3: { history: [], lastVal: 0 },
-            startTime: Date.now()
+            startTime: Date.now(),
+            lastUpdate: null
         };
 
         class Sparkline {
@@ -447,24 +448,36 @@
             sparks[id].draw(state[id].history);
         }
 
-        function updateGlobalStatus(online, latency = 0) {
+        function refreshGlobalStatus() {
             const dot = document.getElementById('status-dot');
             const text = document.getElementById('status-text');
             const lat = document.getElementById('latency');
             const overlay = document.getElementById('no-connection-overlay');
 
-            if (online) {
+            if (!state.lastUpdate) {
+                dot.classList.remove('online');
+                text.innerText = 'WAITING';
+                text.style.color = 'var(--text-secondary)';
+                lat.innerText = '...';
+                return;
+            }
+
+            const now = Date.now();
+            const diff = now - state.lastUpdate;
+            const isFresh = diff < 10000; 
+
+            if (isFresh) {
                 dot.classList.add('online');
                 text.innerText = 'ONLINE';
                 text.style.color = 'var(--color-ok)';
-                lat.innerText = `${latency}ms`;
+                lat.innerText = `${Math.floor(diff)}ms`;
                 overlay.classList.remove('visible');
             } else {
                 dot.classList.remove('online');
-                text.innerText = 'OFFLINE';
-                text.style.color = 'var(--color-offline)';
-                lat.innerText = '0ms';
-                overlay.classList.add('visible');
+                text.innerText = 'STALE / OFFLINE';
+                text.style.color = 'var(--color-trip)';
+                lat.innerText = `${Math.floor(diff / 1000)}s ago`;
+                if (diff > 15000) overlay.classList.add('visible');
             }
         }
 
@@ -480,8 +493,7 @@
             const phase = payload.phase;
             if (state[phase]) {
                 updatePhaseUI(phase, payload);
-                const latency = Date.now() - new Date(payload.updated_at).getTime();
-                updateGlobalStatus(true, Math.max(0, latency));
+                state.lastUpdate = new Date(payload.updated_at).getTime();
                 document.getElementById('last-update').innerText = new Date().toLocaleTimeString();
             }
         }
@@ -490,9 +502,6 @@
             const { data, error } = await client.from('measurements').select('*');
             if (!error && data) {
                 data.forEach(row => processData(row));
-                updateGlobalStatus(true);
-            } else {
-                updateGlobalStatus(false);
             }
 
             client
@@ -505,6 +514,7 @@
 
         init();
         setInterval(updateUptime, 1000);
+        setInterval(refreshGlobalStatus, 1000);
     </script>
 </body>
 </html>
