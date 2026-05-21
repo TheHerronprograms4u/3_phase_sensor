@@ -470,7 +470,14 @@
                 dot.classList.add('online');
                 text.innerText = 'ONLINE';
                 text.style.color = 'var(--color-ok)';
-                lat.innerText = `${Math.floor(diff)}ms`;
+                
+                // Show as seconds if > 1s, otherwise ms
+                if (diff > 1000) {
+                    lat.innerText = `${(diff / 1000).toFixed(1)}s`;
+                } else {
+                    lat.innerText = `${Math.floor(diff)}ms`;
+                }
+                
                 overlay.classList.remove('visible');
             } else {
                 dot.classList.remove('online');
