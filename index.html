@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3-Phase Protection Monitoring</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --bg-deep: #05070a;
@@ -250,8 +251,8 @@
     <div id="no-connection-overlay" class="overlay">
         <div class="error-card">
             <h2>SYSTEM OFFLINE</h2>
-            <p>Unable to connect to ESP32 at 192.168.1.53</p>
-            <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary)">Retrying every second...</p>
+            <p>Waiting for data from Supabase Cloud...</p>
+            <p style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-secondary)">Check ESP32 connection status.</p>
         </div>
     </div>
 
@@ -349,21 +350,21 @@
 
     <script>
         const CONFIG = {
-            ENDPOINT: 'http://192.168.1.53/data',
-            POLL_INTERVAL: 1000,
-            MAX_HISTORY: 50,
-            MOCK_MODE: false // Set to true for UI testing without ESP32
+            SUPABASE_URL: 'https://ygybpgtnwvpplwoxutrv.supabase.co',
+            SUPABASE_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlneWJwZ3Rud3ZwcGx3b3h1dHJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNTc2MjksImV4cCI6MjA5NDkzMzYyOX0.oFa34h-SyghztyDlMvsE_rN0qs_YAZtwZUAee7Jsvrw',
+            MAX_HISTORY: 50
         };
+
+        const { createClient } = supabase;
+        const client = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
 
         const state = {
             L1: { history: [], lastVal: 0 },
             L2: { history: [], lastVal: 0 },
             L3: { history: [], lastVal: 0 },
-            startTime: Date.now(),
-            isConnected: false
+            startTime: Date.now()
         };
 
-        // --- Sparkline Implementation ---
         class Sparkline {
             constructor(canvasId, color) {
                 this.canvas = document.getElementById(canvasId);
@@ -372,39 +373,30 @@
                 this.resize();
                 window.addEventListener('resize', () => this.resize());
             }
-
             resize() {
                 const rect = this.canvas.parentElement.getBoundingClientRect();
                 this.canvas.width = rect.width;
                 this.canvas.height = rect.height;
             }
-
             draw(data) {
                 const { width, height } = this.canvas;
                 this.ctx.clearRect(0, 0, width, height);
                 if (data.length < 2) return;
-
-                const max = Math.max(...data, 240); // Baseline max for voltage scaling
+                const max = Math.max(...data, 240);
                 const min = Math.min(...data, 0);
                 const range = max - min;
-
                 this.ctx.beginPath();
                 this.ctx.strokeStyle = this.color;
                 this.ctx.lineWidth = 2;
                 this.ctx.lineJoin = 'round';
-
                 const step = width / (CONFIG.MAX_HISTORY - 1);
-                
                 data.forEach((val, i) => {
                     const x = i * step;
                     const y = height - ((val - min) / range * height);
                     if (i === 0) this.ctx.moveTo(x, y);
                     else this.ctx.lineTo(x, y);
                 });
-
                 this.ctx.stroke();
-
-                // Gradient fill
                 this.ctx.lineTo(width, height);
                 this.ctx.lineTo(0, height);
                 const grad = this.ctx.createLinearGradient(0, 0, 0, height);
@@ -421,18 +413,15 @@
             L3: new Sparkline('spark-L3', '#00ff88')
         };
 
-        // --- UI Updates ---
         function updatePhaseUI(id, data) {
             const vElem = document.getElementById(`v-${id}`);
             const iElem = document.getElementById(`i-${id}`);
             const badge = document.getElementById(`badge-${id}`);
             const card = document.getElementById(`card-${id}`);
 
-            // Update Values with smooth transition check
             if (vElem.innerText != data.voltage.toFixed(1)) vElem.innerText = data.voltage.toFixed(1);
             if (iElem.innerText != data.current.toFixed(1)) iElem.innerText = data.current.toFixed(1);
 
-            // Status Logic
             let status = 'OK';
             let color = 'var(--color-ok)';
             card.classList.remove('trip-pulse');
@@ -444,7 +433,7 @@
                 status = 'TRIP';
                 color = 'var(--color-trip)';
                 card.classList.add('trip-pulse');
-            } else if (data.current > 10) { // Example warning threshold
+            } else if (data.current > 10) {
                 status = 'WARN';
                 color = 'var(--color-warn)';
             }
@@ -453,7 +442,6 @@
             badge.style.color = color;
             badge.style.borderColor = color;
             
-            // Update Sparkline
             state[id].history.push(data.voltage);
             if (state[id].history.length > CONFIG.MAX_HISTORY) state[id].history.shift();
             sparks[id].draw(state[id].history);
@@ -488,43 +476,35 @@
             document.getElementById('uptime').innerText = `${h}:${m}:${s}`;
         }
 
-        // --- Data Fetching ---
-        async function fetchData() {
-            const start = Date.now();
-            try {
-                let data;
-                if (CONFIG.MOCK_MODE) {
-                    data = {
-                        L1: { voltage: 220 + Math.random()*5, current: 5 + Math.random(), relay: 1, online: true },
-                        L2: { voltage: 221 + Math.random()*5, current: 4 + Math.random(), relay: 1, online: true },
-                        L3: { voltage: 0, current: 0, relay: 0, online: false }
-                    };
-                } else {
-                    const response = await fetch(CONFIG.ENDPOINT, { mode: 'cors' });
-                    data = await response.json();
-                }
-
-                const latency = Date.now() - start;
-                updateGlobalStatus(true, latency);
-                
-                Object.keys(data).forEach(phase => {
-                    updatePhaseUI(phase, data[phase]);
-                });
-
+        function processData(payload) {
+            const phase = payload.phase;
+            if (state[phase]) {
+                updatePhaseUI(phase, payload);
+                const latency = Date.now() - new Date(payload.updated_at).getTime();
+                updateGlobalStatus(true, Math.max(0, latency));
                 document.getElementById('last-update').innerText = new Date().toLocaleTimeString();
-                state.isConnected = true;
-
-            } catch (err) {
-                console.error('Fetch Error:', err);
-                updateGlobalStatus(false);
-                state.isConnected = false;
             }
         }
 
-        // Init
-        setInterval(fetchData, CONFIG.POLL_INTERVAL);
+        async function init() {
+            const { data, error } = await client.from('measurements').select('*');
+            if (!error && data) {
+                data.forEach(row => processData(row));
+                updateGlobalStatus(true);
+            } else {
+                updateGlobalStatus(false);
+            }
+
+            client
+                .channel('public:measurements')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'measurements' }, payload => {
+                    processData(payload.new);
+                })
+                .subscribe();
+        }
+
+        init();
         setInterval(updateUptime, 1000);
-        fetchData(); // Initial call
     </script>
 </body>
 </html>
