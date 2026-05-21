@@ -363,7 +363,7 @@
             L2: { history: [], lastVal: 0 },
             L3: { history: [], lastVal: 0 },
             startTime: Date.now(),
-            lastUpdate: null
+            lastArrival: null // Track local time of last data packet
         };
 
         class Sparkline {
@@ -454,7 +454,7 @@
             const lat = document.getElementById('latency');
             const overlay = document.getElementById('no-connection-overlay');
 
-            if (!state.lastUpdate) {
+            if (!state.lastArrival) {
                 dot.classList.remove('online');
                 text.innerText = 'WAITING';
                 text.style.color = 'var(--text-secondary)';
@@ -463,8 +463,7 @@
             }
 
             const now = Date.now();
-            // Use Math.max(0, ...) to handle slight clock drift between your PC and Supabase server
-            const diff = Math.max(0, now - state.lastUpdate);
+            const diff = now - state.lastArrival; 
             const isFresh = diff < 10000; 
 
             if (isFresh) {
@@ -494,7 +493,7 @@
             const phase = payload.phase;
             if (state[phase]) {
                 updatePhaseUI(phase, payload);
-                state.lastUpdate = new Date(payload.updated_at).getTime();
+                state.lastArrival = Date.now(); // Record arrival time locally
                 document.getElementById('last-update').innerText = new Date().toLocaleTimeString();
             }
         }
